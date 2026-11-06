@@ -1,0 +1,4 @@
+# dsh bundle patch — 向 profile 层插入本插件的工具行。
+- insert:
+    - id: tool-pdf
+      name: dsh-pdf-toolkit
