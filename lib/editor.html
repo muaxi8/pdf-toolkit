@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 在线编辑器 — dsh-pdf-toolkit</title>
+<style>
+  :root { --bg:#111418; --panel:#1a1f26; --border:#2a323d; --fg:#e6e9ee; --dim:#8b95a5; --accent:#4f8cff; --danger:#ff5d5d; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  #app { display:flex; flex-direction:column; height:100%; }
+  header { display:flex; gap:6px; align-items:center; padding:8px; background:var(--panel);
+    border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  header input { background:var(--bg); border:1px solid var(--border);
+    color:var(--fg); border-radius:6px; padding:6px 8px; min-width:220px; }
+  header button { background:var(--bg); color:var(--fg); border:1px solid var(--border);
+    border-radius:6px; padding:6px 10px; cursor:pointer; }
+  header button:hover { border-color:var(--accent); }
+  header button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+  #status { padding:6px 10px; color:var(--dim); border-bottom:1px solid var(--border); min-height:14px; white-space:pre-wrap; }
+  #main { display:flex; flex:1; min-height:0; }
+  #stage { flex:1; overflow:auto; padding:14px; display:flex; justify-content:center; }
+  #pageWrap { position:relative; background:#fff; box-shadow:0 4px 24px rgba(0,0,0,.5); }
+  #pageCanvas, #overlay { display:block; }
+  #overlay { position:absolute; inset:0; cursor:crosshair; touch-action:none; }
+  #side { width:280px; flex:none; border-left:1px solid var(--border); background:var(--panel);
+    overflow:auto; padding:12px; }
+  #side h3 { margin:0 0 8px; font-size:13px; color:var(--dim); }
+  #side .panel { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:10px; }
+  #side .panel label { display:block; margin:6px 0 3px; color:var(--dim); }
+  #side input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--fg);
+    border-radius:6px; padding:6px 8px; }
+  #side button { width:100%; margin-top:8px; background:var(--accent); color:#fff; border:0;
+    border-radius:6px; padding:7px; cursor:pointer; }
+  #side button.ghost { background:var(--bg); color:var(--fg); border:1px solid var(--border); }
+  .tip { color:var(--dim); font-size:12px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="btnText" class="tool" data-tool="text" title="点击页面写入文字">🅣 文字</button>
+    <button id="btnRedact" class="tool" data-tool="redact" title="拖拽方框涂白">▦ 涂白</button>
+    <button id="btnPen" class="tool" data-tool="pen" title="鼠标画手写签名">✎ 签名</button>
+    <button id="btnSelect" class="tool" data-tool="" title="浏览模式">☝ 浏览</button>
+    <span class="sep"></span>
+    <button id="btnPrev" title="上一页">‹</button>
+    <span id="pageInfo">– / –</span>
+    <button id="btnNext" title="下一页">›</button>
+    <span class="sep"></span>
+    <button id="btnRotate" title="顺时针旋转本页 90°">↻ 旋转</button>
+    <button id="btnDel" title="删除本页">✕ 删页</button>
+    <span class="sep"></span>
+    <button id="btnSave" title="把当前结果另存为新 PDF（不覆盖源文件）">💾 另存为新文件</button>
+    <span class="sep"></span>
+    <input id="filePath" type="text" placeholder="PDF 文件路径，如 D:\work\xx.pdf，回车打开">
+    <button id="btnOpen">打开</button>
+  </header>
+  <div id="status">正在启动…</div>
+  <div id="main">
+    <div id="stage"><div id="pageWrap"><canvas id="pageCanvas"></canvas><canvas id="overlay"></canvas></div></div>
+    <aside id="side">
+      <h3>PDF 在线编辑器（本机）</h3>
+      <div class="panel tip">
+        <b>操作提示</b><br>
+        · <b>文字</b>：点击页面 → 右侧填内容 → 写入<br>
+        · <b>涂白</b>：页面上拖拽出方框 → 右侧应用<br>
+        · <b>签名</b>：页面上按住画 → 填姓名 → 应用<br>
+        · 旋转/删页立即生效；所有中间稿在临时目录，<br>
+        &nbsp;&nbsp;只有「另存」会写出正式文件（-edited.pdf）
+      </div>
+      <div class="panel" id="penPanel">
+        <label>签名人姓名</label><input id="penName" placeholder="如：王小二">
+        <label>事由（可选）</label><input id="penReason" placeholder="如：本人确认">
+        <button id="btnApplyPen">✓ 应用到本页</button>
+        <button id="btnClearPen" class="ghost">清空笔迹</button>
+      </div>
+      <div class="panel" id="redactPanel" hidden>
+        <label>已选区域（页面上拖拽）</label>
+        <button id="btnApplyRedact">✓ 应用涂白</button>
+      </div>
+      <div class="panel" id="textPanel" hidden>
+        <label>文字内容</label><input id="textContent" placeholder="要写入的文字">
+        <label>字号 pt</label><input id="textSize" type="text" value="14">
+        <label>颜色 #RRGGBB</label><input id="textColor" type="text" value="#CC0000">
+        <label id="textPosLabel" class="tip">位置：未选择（回到页面点一下）</label>
+        <button id="btnApplyText">✓ 写入文字</button>
+      </div>
+      <div class="panel" id="savePanel">
+        <label>另存文件名（留空 = 自动 &lt;原名&gt;-edited.pdf）</label>
+        <input id="saveName" placeholder="留空自动命名">
+        <button id="btnDoSave">💾 保存为新文件</button>
+      </div>
+    </aside>
+  </div>
+</div>
+<script type="module">
+import * as pdfjs from '/assets/pdf.mjs'
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('/assets/pdf.worker.mjs', location.origin).href
+
+const $ = (id) => document.getElementById(id)
+const statusEl = $('status')
+const setStatus = (t, isErr) => { statusEl.textContent = t; statusEl.style.color = isErr ? 'var(--danger)' : 'var(--dim)' }
+
+const state = {
+  file: null,           // 当前工作文件（临时目录里的版本）
+  base: null,           // 最初打开的源文件（另存从这里命名，绝不覆盖它）
+  sid: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2),
+  pdf: null, pageNo: 1, scale: 1, pageHeight: 0, viewport: null,
+  tool: '', strokes: [], textPos: null, redactRect: null,
+}
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
+  return data
+}
+
+async function loadFile(file) {
+  setStatus(`正在加载：${file}`)
+  const res = await fetch('/pdf?f=' + encodeURIComponent(file))
+  if (!res.ok) throw new Error('加载失败 HTTP ' + res.status)
+  const buf = await res.arrayBuffer()
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
+  state.file = file
+  state.base = file
+  state.pdf = doc
+  state.pageNo = 1
+  state.strokes = []
+  state.redactRect = null
+  $('filePath').value = file
+  await renderPage()
+}
+
+async function renderPage() {
+  if (!state.pdf) return
+  const count = state.pdf.numPages
+  if (state.pageNo < 1) state.pageNo = 1
+  if (state.pageNo > count) state.pageNo = count
+  const page = await state.pdf.getPage(state.pageNo)
+  const base = page.getViewport({ scale: 1 })
+  const s = Math.min(2.2, Math.max(0.5, 1100 / base.width))
+  const vp = page.getViewport({ scale: s })
+  state.scale = s
+  state.viewport = vp
+  state.pageHeight = base.height
+  const canvas = $('pageCanvas')
+  canvas.width = Math.floor(vp.width)
+  canvas.height = Math.floor(vp.height)
+  canvas.style.width = vp.width + 'px'
+  canvas.style.height = vp.height + 'px'
+  const ov = $('overlay')
+  ov.width = canvas.width
+  ov.height = canvas.height
+  ov.style.width = canvas.style.width
+  ov.style.height = canvas.style.height
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+  state.strokes = []
+  state.redactRect = null
+  $('redactPanel').hidden = true
+  drawOverlay()
+  $('pageInfo').textContent = `${state.pageNo} / ${count}`
+  const dirty = state.file !== state.base
+  setStatus(dirty ? `${state.base}\n（已修改，尚未另存；点「另存为新文件」写出）` : state.file)
+}
+
+function drawOverlay() {
+  const ov = $('overlay'), ctx = ov.getContext('2d')
+  ctx.clearRect(0, 0, ov.width, ov.height)
+  for (const st of state.strokes) {
+    ctx.strokeStyle = st.color || '#123A8C'
+    ctx.lineWidth = (st.width || 1.3) * state.scale
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    st.points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x * state.scale, p.y * state.scale) : ctx.lineTo(p.x * state.scale, p.y * state.scale))
+    ctx.stroke()
+  }
+  if (state.redactRect) {
+    ctx.fillStyle = 'rgba(255,255,255,.55)'
+    ctx.fillRect(state.redactRect.x0 * state.scale, state.redactRect.y0 * state.scale, state.redactRect.w * state.scale, state.redactRect.h * state.scale)
+  }
+}
+
+function evtPt(e) {
+  const rect = $('overlay').getBoundingClientRect()
+  const x = (e.clientX - rect.left) / state.scale
+  const y = (e.clientY - rect.top) / state.scale   // 页顶为 0
+  return { x, y, pdfY: state.pageHeight - y }
+}
+
+/* 指针交互 */
+let dragging = null
+$('overlay').addEventListener('pointerdown', (e) => {
+  if (!state.file) return
+  const pt = evtPt(e)
+  if (state.tool === 'text') {
+    state.textPos = pt
+    $('textPanel').hidden = false
+    $('textPosLabel').textContent = `位置：(x=${pt.x.toFixed(0)}, y=${pt.pdfY.toFixed(0)} pt)`
+  } else if (state.tool === 'redact') {
+    dragging = { x0: pt.x, y0: pt.y }
+    state.redactRect = { x0: pt.x, y0: pt.y, w: 0, h: 0 }
+    $('redactPanel').hidden = false
+  } else if (state.tool === 'pen') {
+    dragging = { stroke: { points: [pt], color: '#123A8C', width: 1.4 } }
+    state.strokes.push(dragging.stroke)
+  }
+})
+$('overlay').addEventListener('pointermove', (e) => {
+  if (!dragging) return
+  const pt = evtPt(e)
+  if (state.tool === 'redact') {
+    state.redactRect.w = pt.x - dragging.x0
+    state.redactRect.h = pt.y - dragging.y0
+    drawOverlay()
+  } else if (state.tool === 'pen') {
+    dragging.stroke.points.push(pt)
+    drawOverlay()
+  }
+})
+window.addEventListener('pointerup', () => { dragging = null })
+
+/* 工具切换 */
+for (const btn of document.querySelectorAll('.tool')) {
+  btn.addEventListener('click', () => {
+    state.tool = btn.dataset.tool
+    for (const b of document.querySelectorAll('.tool')) b.classList.toggle('active', b === btn)
+    $('overlay').style.cursor = state.tool === '' ? 'default' : 'crosshair'
+  })
+}
+
+/* 翻页 / 打开 */
+$('btnPrev').onclick = async () => { if (!state.pdf) return; state.pageNo--; await renderPage() }
+$('btnNext').onclick = async () => { if (!state.pdf) return; state.pageNo++; await renderPage() }
+$('btnOpen').onclick = async () => { try { await loadFile($('filePath').value.trim()) } catch (err) { setStatus('打开失败：' + err.message, true) } }
+$('filePath').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnOpen').click() })
+
+/* 应用操作（引擎落到工作副本，返回新文件路径） */
+async function apply(op) {
+  const data = await api('/api/apply', { sid: state.sid, base: state.base, file: state.file, ops: [op] })
+  state.file = data.out
+  await renderPage()
+  setStatus('✓ ' + String(data.summary || '').split('\n').pop())
+  return data
+}
+
+$('btnRotate').onclick = async () => { try { await apply({ op: 'rotate_page_by', page: state.pageNo, delta: 90 }) } catch (err) { setStatus('旋转失败：' + err.message, true) } }
+$('btnDel').onclick = async () => {
+  try {
+    if (!state.pdf || state.pdf.numPages <= 1) { setStatus('只剩一页，不能删', true); return }
+    await apply({ op: 'remove_page', pages: [state.pageNo] })
+  } catch (err) { setStatus('删页失败：' + err.message, true) }
+}
+$('btnApplyText').onclick = async () => {
+  try {
+    if (!state.textPos) { setStatus('先在页面上点一下选择文字位置', true); return }
+    const text = $('textContent').value
+    if (!text) { setStatus('请输入文字内容', true); return }
+    const size = parseFloat($('textSize').value) || 14
+    state.textPos.y = state.textPos.pdfY - size * 0.8
+    await apply({ op: 'add_text', page: state.pageNo, x: state.textPos.x, y: state.textPos.y, text, size: Math.max(6, size), color: $('textColor').value.trim() || '#000000' })
+    state.textPos = null
+    $('textPanel').hidden = true
+    $('textContent').value = ''
+  } catch (err) { setStatus('写文字失败：' + err.message, true) }
+}
+$('btnApplyRedact').onclick = async () => {
+  try {
+    const r = state.redactRect
+    if (!r || Math.abs(r.w) < 2 || Math.abs(r.h) < 2) { setStatus('先在页面上拖拽出要涂白的区域', true); return }
+    await apply({ op: 'redact', page: state.pageNo, x: Math.min(r.x0, r.x0 + r.w), y: Math.min(r.y0, r.y0 + r.h), w: Math.abs(r.w), h: Math.abs(r.h), color: '#FFFFFF' })
+    state.redactRect = null
+    $('redactPanel').hidden = true
+  } catch (err) { setStatus('涂白失败：' + err.message, true) }
+}
+
+/* 签名 */
+$('btnApplyPen').onclick = async () => {
+  try {
+    if (!state.strokes.length) { setStatus('先在页面上按住画一笔', true); return }
+    const name = $('penName').value.trim()
+    if (!name) { setStatus('请填签名人姓名', true); return }
+    const data = await api('/api/sign', {
+      sid: state.sid, base: state.base, file: state.file, page: state.pageNo,
+      ink: state.strokes.map((st) => ({ points: st.points.map((p) => [p.x, p.pdfY]), color: st.color, width: st.width })),
+      text: { name, reason: $('penReason').value.trim() || undefined },
+    })
+    state.file = data.out
+    await renderPage()
+    $('penName').value = ''
+    setStatus('✓ 签名已画到本页（另存后写入正式文件）')
+  } catch (err) { setStatus('签名失败：' + err.message, true) }
+}
+$('btnClearPen').onclick = () => { state.strokes = []; drawOverlay() }
+
+/* 另存：基于最初打开的源文件命名，绝不覆盖源文件 */
+async function doSave() {
+  const name = $('saveName').value.trim()
+  const data = await api('/api/save', { base: state.base, file: state.file, out: name || undefined })
+  setStatus('✓ 已保存：' + data.saved)
+  return data.saved
+}
+$('btnDoSave').onclick = async () => { try { await doSave() } catch (err) { setStatus('保存失败：' + err.message, true) } }
+$('btnSave').onclick = $('btnDoSave').onclick
+
+/* 启动：URL 带 ?f= 自动打开 */
+function boot() {
+  const p = new URLSearchParams(location.search).get('f')
+  api('/api/health').then((d) => setStatus('服务正常：' + d.name)).catch((err) => setStatus('服务未连接：' + err.message, true))
+  if (p) loadFile(p).catch((err) => setStatus('自动打开失败：' + err.message, true))
+}
+boot()
+</script>
+</body>
+</html>
