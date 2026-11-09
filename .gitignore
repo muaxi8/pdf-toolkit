@@ -2,6 +2,7 @@
 node_modules/
 dist/
 *.tgz
+pnpm-lock.yaml
 
 # 本机开发配置（store 路径指向本机，不进仓库）
 .npmrc
