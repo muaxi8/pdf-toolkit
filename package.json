@@ -4,6 +4,14 @@
   "description": "DeepSeek Harness PDF toolbox: open/read, edit, split, merge, handwritten signature (pdf-lib + pdfjs).",
   "author": "dsh-pdf-toolkit authors",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muaxi8/pdf-toolkit.git"
+  },
+  "homepage": "https://github.com/muaxi8/pdf-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/muaxi8/pdf-toolkit/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "engines": {

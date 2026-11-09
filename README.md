@@ -11,16 +11,16 @@ DeepSeek Harness PDF 工具箱插件：**打开阅读、编辑内容、拆分、
 在 DSH 的插件市场直接填入本仓库地址（市场交由 pnpm 拉取安装）：
 
 ```
-https://github.com/<你的账号>/dsh-pdf-toolkit
+https://github.com/muaxi8/pdf-toolkit
 ```
 
 等价的 CLI 安装（市场背后走的就是这条 pnpm 链路）：
 
 ```powershell
 # 简写形式
-dsh plugin --profile desktop add github:<你的账号>/dsh-pdf-toolkit
+dsh plugin --profile desktop add github:muaxi8/pdf-toolkit
 # 完整 URL 形式
-dsh plugin --profile desktop add https://github.com/<你的账号>/dsh-pdf-toolkit.git
+dsh plugin --profile desktop add https://github.com/muaxi8/pdf-toolkit.git
 ```
 
 **方式二：本地 tarball**
@@ -131,8 +131,8 @@ dsh plugin --profile desktop add file:D:\path\to\dsh-pdf-toolkit
 - git 工作流：
 
   ```powershell
-  git clone <仓库地址>
-  cd dsh-pdf-toolkit
+  git clone https://github.com/muaxi8/pdf-toolkit.git
+  cd pdf-toolkit
   pnpm install              # .npmrc 是本机专属配置（store 路径），已 gitignore
   node scripts/smoke.mjs    # 引擎级冒烟，改完代码先跑它
   node scripts/schema-check.mjs
