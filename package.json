@@ -1,6 +1,6 @@
 {
   "name": "dsh-pdf-toolkit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DeepSeek Harness PDF toolbox: open/read, edit, split, merge, handwritten signature (pdf-lib + pdfjs).",
   "author": "dsh-pdf-toolkit authors",
   "license": "Apache-2.0",

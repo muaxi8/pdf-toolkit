@@ -96,7 +96,25 @@ try {
   const signedDoc = await PDFDocument.load(readFileSync(signed))
   assert(signedDoc.getPageCount() === 2, 'pdf_sign：页码不变')
 
-  /* 7. 源文件保持不变 */
+  /* 7. 重放式签名 op（add_signature：笔迹+文字+自定义文字色，可整体平移重放） */
+  const sigOp = {
+    op: 'add_signature', page: 1, color: '#123A8C', width: 1.3,
+    ink: [{ points: [[80, 90], [110, 120], [150, 80]], width: 1.3 }],
+    text: { name: '张三', date: '2026-11-09', reason: '同意' },
+    textColor: '#CC0000', textX: 80, textY: 60,
+  }
+  const replayed = join(work, 'replayed.pdf')
+  await editPdf(sample, [sigOp], replayed)
+  assert(existsSync(replayed), 'add_signature：重放文件已生成')
+  const replayedText = await readPdf(new Uint8Array(readFileSync(replayed)), { maxChars: 4000 })
+  assert(replayedText.pages[0].text.includes('张三'), 'add_signature：签字文字（中文姓名）在文本层可见')
+  sigOp.ink[0].points = sigOp.ink[0].points.map(([x, y]) => [x + 30, y + 30])
+  sigOp.textX += 30; sigOp.textY += 30
+  const moved2 = join(work, 'replayed-moved.pdf')
+  await editPdf(sample, [sigOp], moved2)
+  assert(existsSync(moved2), 'add_signature：整体平移后重放文件已生成')
+
+  /* 8. 源文件保持不变 */
   const before = statSync(sample)
   assert(before.size === statSync(sample).size, '源文件未被任何操作覆盖')
 
